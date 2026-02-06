@@ -59,6 +59,9 @@ func (c *Client) GetVisits(siteID int, opts VisitOptions) ([]Visit, error) {
 		return nil, err
 	}
 
+	// for debug
+	fmt.Println("Raw response : %s",respBody)
+
 	// Response structure likely: {"visits": [...], ...} or just [...]
 	// Let's assume wrapper first
 	type visitsWrapper struct {
