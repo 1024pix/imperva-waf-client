@@ -72,7 +72,7 @@ func main() {
 	} else {
 		fmt.Printf("Found %d visits (showing first 5):\n", len(visits))
 		for _, v := range visits {
-			fmt.Printf(" - IP: %s, Country: %s\n", v.ClientIP, v.Country)
+			fmt.Printf(" - IP: %v, Country: %v\n", v.ClientIPs, v.Countries)
 		}
 	}
 

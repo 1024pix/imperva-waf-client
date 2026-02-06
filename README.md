@@ -12,6 +12,8 @@ This client implements the following Imperva Cloud WAF APIs:
     * [Documentation](https://docs-cybersec.thalesgroup.com/bundle/api-docs/page/session-release-api.htm?operationId=operations-Session_Release_API-releaseSession)
 * **Traffic Statistics & Logs** (v1)
     * [Documentation](https://docs-cybersec.thalesgroup.com/bundle/api-docs/page/traffic-stats-api-definition.htm)
+* **Security Events**
+    * [Documentation](https://docs-cybersec.thalesgroup.com/bundle/api-docs/page/attack-analytics-api-definition.htm?operationId=operations-Attack_Analytics-getSampleEventsByIncident)
 
 ## Implemented Endpoints
 
