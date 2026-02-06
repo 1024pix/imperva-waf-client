@@ -26,7 +26,6 @@ type Config struct {
 	APIID     string `json:"api_id"`
 	APIKey    string `json:"api_key"`
 	AccountID string `json:"account_id"`
-	SiteID    int    `json:"site_id"`
 }
 
 // NewClient creates a new Imperva API client.

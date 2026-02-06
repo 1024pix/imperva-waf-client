@@ -27,13 +27,13 @@ type BlockDurationDetails struct {
 
 // Rule represents a custom rule interaction object.
 type Rule struct {
-	ID                   string                `json:"rule_id,omitempty"` // Read-only
+	ID                   int                   `json:"rule_id,omitempty"` // Read-only
 	Name                 string                `json:"name,omitempty"`
 	Action               string                `json:"action,omitempty"`
 	Filter               string                `json:"filter,omitempty"`
 	ResponseCode         int                   `json:"response_code,omitempty"`
+	Enabled              bool                  `json:"enabled,omitempty"` // v3 field
 	BlockDurationDetails *BlockDurationDetails `json:"blockDurationDetails,omitempty"`
-	// Additional fields can be added as needed based on specific rule types
 }
 
 // CreateRule creates a new custom rule for a site.
@@ -52,8 +52,8 @@ func (c *Client) CreateRule(siteID int, rule Rule) (*Rule, error) {
 }
 
 // GetRule retrieves a specific rule by ID.
-func (c *Client) GetRule(siteID int, ruleID string) (*Rule, error) {
-	path := fmt.Sprintf("/api/prov/v2/sites/%d/rules/%s", siteID, ruleID)
+func (c *Client) GetRule(siteID int, ruleID int) (*Rule, error) {
+	path := fmt.Sprintf("/api/prov/v2/sites/%d/rules/%d", siteID, ruleID)
 	respBody, err := c.Get(path)
 	if err != nil {
 		return nil, err
@@ -67,9 +67,9 @@ func (c *Client) GetRule(siteID int, ruleID string) (*Rule, error) {
 }
 
 // UpdateRule updates an existing rule.
-func (c *Client) UpdateRule(siteID int, ruleID string, rule Rule) (*Rule, error) {
-	path := fmt.Sprintf("/api/prov/v2/sites/%d/rules/%s", siteID, ruleID)
-	respBody, err := c.Post(path, rule) // Documentation says POST for update sometimes, but standard is PUT. Rules API doc said POST to update (Overwrite is PUT). Let's stick to doc: Update rule is POST.
+func (c *Client) UpdateRule(siteID int, ruleID int, rule Rule) (*Rule, error) {
+	path := fmt.Sprintf("/api/prov/v2/sites/%d/rules/%d", siteID, ruleID)
+	respBody, err := c.Post(path, rule)
 	if err != nil {
 		return nil, err
 	}
@@ -82,8 +82,8 @@ func (c *Client) UpdateRule(siteID int, ruleID string, rule Rule) (*Rule, error)
 }
 
 // DeleteRule deletes a rule.
-func (c *Client) DeleteRule(siteID int, ruleID string) error {
-	path := fmt.Sprintf("/api/prov/v2/sites/%d/rules/%s", siteID, ruleID)
+func (c *Client) DeleteRule(siteID int, ruleID int) error {
+	path := fmt.Sprintf("/api/prov/v2/sites/%d/rules/%d", siteID, ruleID)
 	respBody, err := c.Delete(path, nil)
 	if err != nil {
 		return err
@@ -100,44 +100,36 @@ func (c *Client) DeleteRule(siteID int, ruleID string) error {
 	return nil
 }
 
-// ListRules lists all rules for a site using the v1 API.
+// ListRules lists all rules for a site using the v3 API.
 func (c *Client) ListRules(siteID int) ([]Rule, error) {
-	// Using v1 API which returns the detailed rule structure including filter.
-	path := "/api/prov/v1/sites/incapRules/list"
+	// Using v3 API: GET /api/prov/v3/rules?siteIds=...
+	path := fmt.Sprintf("/api/prov/v3/rules?siteIds=%d&page_size=100", siteID)
 
-	// v1 List is POST
-	// Body: {"site_id": "..."}
-	reqBody := map[string]string{
-		"site_id": fmt.Sprintf("%d", siteID),
-	}
-
-	respBody, err := c.Post(path, reqBody)
+	respBody, err := c.Get(path)
 	if err != nil {
 		return nil, err
 	}
 
-	// Response is {"incap_rules": {"All": [{"id":..., "name":...}]}}
-	// The key "All" seems standard but we should iterate map values to be safe or check documentation if it changes.
-
-	type ListRulesResponse struct {
-		IncapRules map[string][]Rule `json:"incap_rules"`
-		Res        int               `json:"res"`
-		ResMessage string            `json:"res_message"`
+	type V3RuleItem struct {
+		Rule      Rule `json:"rule"`
+		SiteID    int  `json:"site_id"`
+		AccountID int  `json:"account_id"`
 	}
 
-	var wrapper ListRulesResponse
+	type V3ListResponse struct {
+		Data []V3RuleItem `json:"data"`
+		Meta interface{}  `json:"meta,omitempty"`
+	}
+
+	var wrapper V3ListResponse
 	if err := json.Unmarshal(respBody, &wrapper); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal list rules response: %w", err)
 	}
 
-	if wrapper.Res != 0 {
-		return nil, fmt.Errorf("list rules failed: %s (%d)", wrapper.ResMessage, wrapper.Res)
+	var rules []Rule
+	for _, item := range wrapper.Data {
+		rules = append(rules, item.Rule)
 	}
 
-	var allRules []Rule
-	for _, rules := range wrapper.IncapRules {
-		allRules = append(allRules, rules...)
-	}
-
-	return allRules, nil
+	return rules, nil
 }
