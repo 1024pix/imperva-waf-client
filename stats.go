@@ -60,7 +60,7 @@ func (c *Client) GetVisits(siteID int, opts VisitOptions) ([]Visit, error) {
 	}
 
 	// for debug
-	fmt.Println("Raw response : %s",respBody)
+	fmt.Printf("Raw response : %s",respBody)
 
 	// Response structure likely: {"visits": [...], ...} or just [...]
 	// Let's assume wrapper first
