@@ -8,21 +8,61 @@ import (
 
 // Site represents an Imperva site configuration.
 type Site struct {
-	SiteID int    `json:"site_id"`
-	Domain string `json:"domain"`
-	Status string `json:"status"`
-	Active bool   `json:"active"`
+	SiteID            int           `json:"site_id"`
+	Domain            string        `json:"domain"`
+	Status            string        `json:"status"`
+	Active            interface{}   `json:"active"` // Can be string "active" or boolean true
+	Security          *SiteSecurity `json:"security,omitempty"`
+	AccountId         int           `json:"account_id,omitempty"`
+	AccelerationLevel string        `json:"acceleration_level,omitempty"`
+	SiteCreationDate  int64         `json:"site_creation_date,omitempty"`
+	DisplayName       string        `json:"display_name,omitempty"`
+}
+
+type SiteSecurity struct {
+	Waf *SiteWaf `json:"waf,omitempty"`
+}
+
+type SiteWaf struct {
+	Rules []SiteRule `json:"rules,omitempty"`
+}
+
+type SiteRule struct {
+	ID         interface{} `json:"id"` // Can be string or int (e.g. "api.threats.sql_injection" or 10804307)
+	Name       string      `json:"name"`
+	Action     string      `json:"action"`
+	ActionText string      `json:"action_text,omitempty"`
+}
+
+// Helper to check if site is active
+func (s *Site) IsActive() bool {
+	if s.Active == nil {
+		return false
+	}
+	if b, ok := s.Active.(bool); ok {
+		return b
+	}
+	if str, ok := s.Active.(string); ok {
+		return str == "active" || str == "true"
+	}
+	return false
 }
 
 // ListSites lists all sites for the account.
 func (c *Client) ListSites(options map[string]string) ([]Site, error) {
 	u := url.Values{}
+	// Default pagination
+	pageSize := "100"
 	if val, ok := options["page_size"]; ok {
-		u.Set("page_size", val)
+		pageSize = val
 	}
+	u.Set("page_size", pageSize)
+
+	pageNum := "0"
 	if val, ok := options["page_num"]; ok {
-		u.Set("page_num", val)
+		pageNum = val
 	}
+	u.Set("page_num", pageNum)
 	if c.AccountID != "" {
 		u.Set("account_id", c.AccountID)
 	}
@@ -30,29 +70,42 @@ func (c *Client) ListSites(options map[string]string) ([]Site, error) {
 	// Append query parameters to path
 	path := "/api/prov/v1/sites/list?" + u.Encode()
 
-	// API is POST with Query Parameters and Empty Body.
-	respBody, err := c.Post(path, nil)
+	// API is POST with Query Parameters and Empty JSON Body.
+	// Sending {} ensures valid JSON content type usage.
+	respBody, err := c.Post(path, map[string]string{})
 	if err != nil {
 		return nil, err
 	}
 
-	// Response key is strictly "ApiResultSiteStatus" per documentation/user verification.
-	// Structure: { "res": 0, "res_message": "OK", "ApiResultSiteStatus": [ ... sites ... ] }
+	// Debug: Print raw response to verify structure
+	// fmt.Println("Raw sites response:", string(respBody))
 
-	type ListSitesResponse struct {
-		Res                 int    `json:"res"`
-		ResMessage          string `json:"res_message"`
-		ApiResultSiteStatus []Site `json:"ApiResultSiteStatus"`
+	// Parse response
+	var rawResponse map[string]interface{}
+	if err := json.Unmarshal(respBody, &rawResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal raw list sites response: %w", err)
 	}
 
-	var wrapper ListSitesResponse
-	if err := json.Unmarshal(respBody, &wrapper); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal list sites response: %w", err)
+	// Check for API level error (res != 0)
+	if res, ok := rawResponse["res"].(float64); ok && int(res) != 0 {
+		msg, _ := rawResponse["res_message"].(string)
+		return nil, fmt.Errorf("list sites failed: %s (%d)", msg, int(res))
 	}
 
-	if wrapper.Res != 0 {
-		return nil, fmt.Errorf("list sites failed: %s (%d)", wrapper.ResMessage, wrapper.Res)
+	// Look for the sites list in "sites" key (as confirmed by user)
+	// We also check "ApiResultSiteStatus" as fallback just in case or for legacy.
+	var sites []Site
+	keysToCheck := []string{"sites", "ApiResultSiteStatus", "data"}
+
+	for _, key := range keysToCheck {
+		if val, ok := rawResponse[key]; ok {
+			// val is []interface{}, we need to marshal/unmarshal to get []Site
+			b, _ := json.Marshal(val)
+			if err := json.Unmarshal(b, &sites); err == nil {
+				return sites, nil
+			}
+		}
 	}
 
-	return wrapper.ApiResultSiteStatus, nil
+	return nil, fmt.Errorf("could not find sites list in response: keys checked %v", keysToCheck)
 }

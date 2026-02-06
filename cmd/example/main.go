@@ -36,7 +36,7 @@ func main() {
 
 	// 3. List Sites & Dynamic Selection
 	fmt.Println("Fetching available sites...")
-	sites, err := client.ListSites(nil) // Fetch all (page 0, default size) or handle pagination if needed
+	sites, err := client.ListSites(nil) // Fetch all (page 0, default size) or handle pagination if needed (TODO)
 	if err != nil {
 		fmt.Printf("Error listing sites: %v\n", err)
 		return
@@ -50,10 +50,16 @@ func main() {
 	fmt.Println("Available Sites:")
 	for _, s := range sites {
 		status := s.Status
-		if s.Active {
+		if s.IsActive() {
 			status += " (Active)"
 		}
 		fmt.Printf(" - ID: %d | Domain: %s | Status: %s\n", s.SiteID, s.Domain, status)
+		if s.Security != nil && s.Security.Waf != nil {
+			fmt.Printf("   WAF Rules Configured: %d\n", len(s.Security.Waf.Rules))
+			for _, r := range s.Security.Waf.Rules {
+				fmt.Printf("    * %s (%v): %s\n", r.Name, r.ID, r.Action)
+			}
+		}
 	}
 
 	fmt.Print("\nEnter Site ID to test: ")
